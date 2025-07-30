@@ -370,6 +370,114 @@ class AIService(Document):
 		print(f"[AIService] test_connection() Exception: {e!s}")
 		return {"status": "error", "message": error_msg}
 
+	@frappe.whitelist()
+	def make_ai_call(self, user_prompt=None, system_prompt=None, custom_data=None, system_prompt_level=False):
+		"""
+		Make a call to the AI service with custom prompts and data.
+
+		Args:
+			user_prompt (str): Custom user prompt (overrides default)
+			system_prompt (str): Custom system prompt (overrides default)
+			custom_data (dict): Additional data to include in the prompt
+
+		Returns:
+			dict: Response from AI service
+		"""
+
+		if not self.is_active:
+			frappe.throw(f"AI Service {self.name} is not active")
+
+		# Build headers and payload
+		headers = self._build_headers()
+		payload = self._build_ai_call_payload(user_prompt, system_prompt, custom_data, system_prompt_level)
+
+		# Make the request
+		url = self.base_url + (getattr(self, "base_url_suffix", "") or "")
+		http_method = getattr(self, "http_method", None) or "POST"
+
+		try:
+			resp = self._send_ai_request(url, headers, payload, http_method)
+			return self._handle_ai_response(resp)
+		except Exception as e:
+			print(f"[AIService] make_ai_call() Exception: {e!s}")
+			frappe.throw(f"AI call failed: {e!s}")
+
+	def _build_ai_call_payload(
+		self, user_prompt=None, system_prompt=None, custom_data=None, system_prompt_level=False
+	):
+		"""Build payload for AI service call with custom prompts."""
+		# Use provided prompts or fall back to defaults
+		final_system_prompt = system_prompt or getattr(self, "system_prompt", "")
+		final_user_prompt = user_prompt or getattr(self, "user_prompt", "")
+
+		# Process Jinja templates if custom_data is provided
+		if custom_data and final_system_prompt:
+			final_system_prompt = self._render_jinja_template(final_system_prompt, custom_data)
+		if custom_data and final_user_prompt:
+			final_user_prompt = self._render_jinja_template(final_user_prompt, custom_data)
+
+		# Build messages array
+		messages = []
+		if final_system_prompt and self.service_type != "Claude":
+			messages.append({"role": "system", "content": final_system_prompt})
+
+		if final_user_prompt:
+			messages.append({"role": "user", "content": final_user_prompt})
+
+		# Build payload based on service type
+		payload = {"messages": messages}
+
+		# Add model name if specified
+		if getattr(self, "model_name", None):
+			payload["model"] = self.model_name
+
+		if self.service_type == "Claude":
+			payload["system"] = final_system_prompt
+
+		# Add max_tokens for Claude services
+		if self.service_type == "Claude":
+			payload["max_tokens"] = 4000
+
+		print(f"[AIService] _build_ai_call_payload() payload: {payload}")
+		return payload
+
+	def _render_jinja_template(self, template, data):
+		"""Render Jinja template with provided data."""
+		try:
+			from jinja2 import Template
+
+			template_obj = Template(template)
+			return template_obj.render(**data)
+		except Exception as e:
+			print(f"[AIService] _render_jinja_template() error: {e!s}")
+			# Return original template if rendering fails
+			return template
+
+	def _send_ai_request(self, url, headers, payload, http_method):
+		"""Send AI request to the service."""
+		print(f"[AIService] _send_ai_request() to: {url}")
+		print(f"[AIService] _send_ai_request() payload: {payload}")
+
+		if http_method.upper() == "POST":
+			return requests.post(url, headers=headers, json=payload, timeout=60)
+		else:
+			return requests.get(url, headers=headers, timeout=60)
+
+	def _handle_ai_response(self, resp):
+		"""Handle AI service response."""
+		print(f"[AIService] _handle_ai_response() status: {resp.status_code}")
+
+		if resp.status_code < 400:
+			try:
+				data = resp.json()
+				return {"status": "success", "data": data, "raw_response": resp.text}
+			except Exception as e:
+				return {"status": "success", "data": {"content": resp.text}, "raw_response": resp.text}
+		else:
+			error_msg = f"AI call failed. Status: {resp.status_code}, Response: {resp.text}"
+			print(f"[AIService] _handle_ai_response() error: {error_msg}")
+			frappe.throw(error_msg)
+
 
 @frappe.whitelist()
 def ping(docname):
@@ -381,3 +489,10 @@ def ping(docname):
 def test_connection(docname):
 	doc = frappe.get_doc("AI Service", docname)
 	return doc.test_connection()
+
+
+@frappe.whitelist()
+def make_ai_call(docname, user_prompt=None, system_prompt=None, custom_data=None):
+	"""Wrapper function to make AI service call."""
+	doc = frappe.get_doc("AI Service", docname)
+	return doc.make_ai_call(user_prompt, system_prompt, custom_data)
