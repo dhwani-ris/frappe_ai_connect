@@ -1,0 +1,145 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-07-23 19:31:38.310567",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "auth_type",
+  "api_key",
+  "api_key_header",
+  "api_key_value",
+  "username",
+  "password",
+  "service_type",
+  "base_url",
+  "base_url_suffix",
+  "custom_headers",
+  "model_name",
+  "is_default",
+  "is_active",
+  "system_prompt",
+  "user_prompt",
+  "info_section"
+ ],
+ "fields": [
+  {
+   "default": "None",
+   "fieldname": "auth_type",
+   "fieldtype": "Select",
+   "label": "Auth Type",
+   "options": "\nNone\nBearer\nAPI Key\nBasic",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.auth_type=='Bearer'",
+   "fieldname": "api_key",
+   "fieldtype": "Password",
+   "label": "Bearer Token"
+  },
+  {
+   "default": "x-api-key",
+   "depends_on": "eval:doc.auth_type=='API Key'",
+   "fieldname": "api_key_header",
+   "fieldtype": "Data",
+   "label": "API Key Header"
+  },
+  {
+   "depends_on": "eval:doc.auth_type=='API Key'",
+   "fieldname": "api_key_value",
+   "fieldtype": "Password",
+   "label": "API Key Value"
+  },
+  {
+   "depends_on": "eval:doc.auth_type=='Basic'",
+   "fieldname": "username",
+   "fieldtype": "Data",
+   "label": "Username"
+  },
+  {
+   "depends_on": "eval:doc.auth_type=='Basic'",
+   "fieldname": "password",
+   "fieldtype": "Password",
+   "label": "Password"
+  },
+  {
+   "description": "Add any extra headers here. For API Key auth, use the fields above for the main key.",
+   "fieldname": "custom_headers",
+   "fieldtype": "Table",
+   "label": "Headers",
+   "options": "AI Service Header"
+  },
+  {
+   "fieldname": "service_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Service Type",
+   "options": "Claude\nPerplexity"
+  },
+  {
+   "fieldname": "base_url",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Base URL",
+   "reqd": 1
+  },
+  {
+   "fieldname": "model_name",
+   "fieldtype": "Data",
+   "label": "Model Name"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_default",
+   "fieldtype": "Check",
+   "label": "Is Default"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "base_url_suffix",
+   "fieldtype": "Data",
+   "label": "Base URL Suffix"
+  },
+  {
+   "fieldname": "system_prompt",
+   "fieldtype": "Long Text",
+   "label": "System Prompt"
+  },
+  {
+   "fieldname": "user_prompt",
+   "fieldtype": "Long Text",
+   "label": "User Prompt"
+  },
+  {
+   "fieldname": "info_section",
+   "fieldtype": "HTML",
+   "options": "<div style=\"font-family: sans-serif; max-width: 800px; line-height: 1.6; color: #333;\">\n  <h2 style=\"border-bottom: 2px solid #ddd; padding-bottom: 4px;\">Help</h2>\n  \n  <p style=\"margin-top: 1em;\">\n    This app lets you configure and manage AI service connections for your Frappe/ERPNext system. \n    It provides a flexible way to integrate with various AI providers like Claude and Perplexity, \n    enabling AI-powered workflows and automation throughout your application.\n  </p>\n\n  <h3 style=\"color: #2c3e50; margin-top: 1.5em;\">What You Can Do</h3>\n  <ul style=\"padding-left: 20px;\">\n    <li>Configure <strong>multiple AI services</strong> (Claude, Perplexity, and more) with different authentication methods.</li>\n    <li>Set up <strong>secure authentication</strong> using Bearer tokens, API keys, or basic auth.</li>\n    <li>Define <strong>custom system prompts</strong> and user prompts for consistent AI interactions.</li>\n    <li>Set a <strong>default service</strong> per service type for automatic selection.</li>\n    <li>Add <strong>custom headers</strong> for specialized API requirements.</li>\n    <li>Test connections to ensure your AI services are working properly.</li>\n    <li>Enable/disable services without deleting them to maintain configuration history.</li>\n  </ul>\n\n  <h3 style=\"color: #2c3e50; margin-top: 1.5em;\">How to Fill This Form</h3>\n  <ol style=\"padding-left: 20px;\">\n    <li><strong>Service Type:</strong> Choose the AI provider (Claude, Perplexity, or custom).</li>\n    <li><strong>Base URL:</strong> Enter the API endpoint URL for your AI service (required).</li>\n    <li><strong>Authentication:</strong> Select the auth type and provide credentials:\n      <ul style=\"padding-left: 20px; margin-top: 8px;\">\n        <li><strong>None:</strong> For services that don't require authentication</li>\n        <li><strong>Bearer:</strong> Enter your Bearer token</li>\n        <li><strong>API Key:</strong> Specify header name (default: x-api-key) and your API key value</li>\n        <li><strong>Basic:</strong> Provide username and password for basic authentication</li>\n      </ul>\n    </li>\n    <li><strong>Model Name:</strong> Specify the AI model to use (e.g., claude-3-sonnet-20240229).</li>\n    <li><strong>Custom Headers:</strong> Add any additional HTTP headers your service requires.</li>\n    <li><strong>System Prompt:</strong> Define the base instructions for the AI service. (Jinja Support)</li>\n    <li><strong>User Prompt:</strong> Set default user-facing prompts for this service. (Jinja Support)</li>\n    <li><strong>Default Service:</strong> Check this to make this the default for its service type.</li>\n    <li><strong>Enabled:</strong> Keep checked to activate this service, uncheck to disable temporarily.</li>\n    <li><strong>Test Connection:</strong> Use the \"Test Connection\" button to verify your setup works.</li>\n  </ol>\n\n  <h3 style=\"color: #2c3e50; margin-top: 1.5em;\">Important Notes</h3>\n  <ul style=\"padding-left: 20px;\">\n    <li>Only <strong>one default service</strong> is allowed per service type (Claude, Perplexity, etc.).</li>\n    <li>You cannot delete the <strong>last active service</strong> of any type - add another first.</li>\n    <li>API keys and passwords are <strong>encrypted</strong> for security.</li>\n    <li>Use the <strong>ping function</strong> to test basic connectivity to your service.</li>\n    <li>Custom headers marked as <strong>sensitive</strong> will be encrypted in storage.</li>\n  </ul>\n\n</div>",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-07-30 14:10:07.771846",
+ "modified_by": "Administrator",
+ "module": "AI Connect",
+ "name": "AI Service",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

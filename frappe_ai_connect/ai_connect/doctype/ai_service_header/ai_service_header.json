@@ -1,0 +1,46 @@
+{
+ "actions": [],
+ "creation": "2025-07-23 17:11:53.832041",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "header_key",
+  "header_value",
+  "is_sensitive"
+ ],
+ "fields": [
+  {
+   "fieldname": "header_key",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Header Key",
+   "reqd": 1
+  },
+  {
+   "fieldname": "header_value",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Header Value",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_sensitive",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Sensitive"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2025-07-24 00:27:38.600637",
+ "modified_by": "Administrator",
+ "module": "AI Connect",
+ "name": "AI Service Header",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
