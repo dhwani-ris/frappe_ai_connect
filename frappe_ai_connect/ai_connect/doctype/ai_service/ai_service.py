@@ -20,7 +20,9 @@ class AIService(Document):
 		if getattr(self, "auth_type", None) == "API Key":
 			if not getattr(self, "api_key_header", None) or not getattr(self, "api_key_value", None):
 				frappe.throw(
-					"For API Key authentication, you must set both the API Key Header and API Key Value."
+					frappe._(
+						"For API Key authentication, you must set both the API Key Header and API Key Value."
+					)
 				)
 
 	def validate_unique_default(self):
@@ -31,8 +33,10 @@ class AIService(Document):
 			)
 			if existing_default:
 				frappe.throw(
-					f"Only one default service allowed per service type. "
-					f"Please uncheck default for existing {self.service_type} service."
+					frappe._(
+						f"Only one default service allowed per service type. "
+						f"Please uncheck default for existing {self.service_type} service."
+					)
 				)
 
 	def on_update(self):
@@ -45,8 +49,10 @@ class AIService(Document):
 		)
 		if not remaining_services:
 			frappe.throw(
-				f"Cannot delete the last active {self.service_type} service. "
-				f"Please add another service first."
+				frappe._(
+					f"Cannot delete the last active {self.service_type} service. "
+					f"Please add another service first."
+				)
 			)
 
 	@frappe.whitelist()
@@ -183,7 +189,7 @@ class AIService(Document):
 				payload = json.loads(payload)
 			return payload
 		except Exception as e:
-			frappe.throw(f"Invalid custom_payload: {e!s}")
+			frappe.throw(frappe._(f"Invalid custom_payload: {e!s}"))
 
 	def _build_default_payload(self):
 		"""Build default payload for AI service."""
@@ -217,7 +223,7 @@ class AIService(Document):
 			return self._handle_response(resp, request_type)
 		except Exception as e:
 			if request_type == "ping":
-				frappe.throw(f"Ping failed: {e!s}")
+				frappe.throw(frappe._(f"Ping failed: {e!s}"))
 			else:
 				raise e
 
@@ -280,7 +286,9 @@ class AIService(Document):
 	def _handle_error_response(self, resp, request_type):
 		"""Handle error response based on request type."""
 		error_handlers = {
-			"ping": lambda r: frappe.throw(f"Ping failed. Status: {r.status_code}, Response: {r.text}"),
+			"ping": lambda r: frappe.throw(
+				frappe._(f"Ping failed. Status: {r.status_code}, Response: {r.text}")
+			),
 			"test": self._handle_test_error,
 			"ai_call": lambda r: frappe.throw(
 				frappe._(f"AI call failed. Status: {r.status_code}, Response: {r.text}")
@@ -289,7 +297,7 @@ class AIService(Document):
 
 		handler = error_handlers.get(
 			request_type,
-			lambda r: frappe.throw(f"Request failed. Status: {r.status_code}, Response: {r.text}"),
+			lambda r: frappe.throw(frappe._(f"Request failed. Status: {r.status_code}, Response: {r.text}")),
 		)
 		return handler(resp)
 
@@ -346,7 +354,7 @@ class AIService(Document):
 
 	def _handle_generic_error(self, e):
 		"""Handle generic error."""
-		error_msg = frappe._("Connection test failed: {e!s}")
+		error_msg = frappe._(f"Connection test failed: {e!s}")
 		frappe.msgprint(error_msg, title=frappe._("Connection Test"), indicator="red")
 		return {"status": "error", "message": error_msg}
 
@@ -391,7 +399,7 @@ class AIService(Document):
 		"""
 
 		if not self.is_active:
-			frappe.throw(f"AI Service {self.name} is not active")
+			frappe.throw(frappe._(f"AI Service {self.name} is not active"))
 
 		request_data = self._prepare_ai_request(user_prompt, system_prompt, custom_data, messages, payload)
 		return self._execute_ai_request(request_data)
