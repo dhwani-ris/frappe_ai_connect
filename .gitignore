@@ -53,5 +53,3 @@ jspm_packages/
 
 # Aider AI Chat
 .aider*
-
-.pre-commit-config.yaml
