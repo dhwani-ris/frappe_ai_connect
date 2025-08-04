@@ -5,6 +5,7 @@ import frappe
 import requests
 from frappe.model.document import Document
 from frappe.utils.password import get_decrypted_password
+from jinja2 import Template
 
 
 class AIService(Document):
@@ -23,93 +24,72 @@ class AIService(Document):
 				)
 
 	def validate_unique_default(self):
-		print(
-			f"[AIService] validate_unique_default() for: {self.name}, is_default={self.is_default}, "
-			f"service_type={self.service_type}"
-		)
 		if self.is_default:
 			existing_default = frappe.get_all(
 				"AI Service",
 				filters={"service_type": self.service_type, "is_default": 1, "name": ["!=", self.name]},
 			)
-			print(f"[AIService] Found existing_default: {existing_default}")
 			if existing_default:
-				print("[AIService] Only one default service allowed per type. Throwing error.")
 				frappe.throw(
 					f"Only one default service allowed per service type. "
 					f"Please uncheck default for existing {self.service_type} service."
 				)
-		print(f"[AIService] validate_unique_default() completed for: {self.name}")
 
 	def on_update(self):
-		print(f"[AIService] on_update() called for: {self.name}")
 		frappe.clear_cache(doctype="AI Service")
-		print(f"[AIService] on_update() completed for: {self.name}")
 
 	def on_trash(self):
-		print(f"[AIService] on_trash() called for: {self.name}")
 		remaining_services = frappe.get_all(
 			"AI Service",
 			filters={"service_type": self.service_type, "is_active": 1, "name": ["!=", self.name]},
 		)
-		print(f"[AIService] Remaining services after trash: {remaining_services}")
 		if not remaining_services:
-			print("[AIService] Cannot delete last active service. Throwing error.")
 			frappe.throw(
 				f"Cannot delete the last active {self.service_type} service. "
 				f"Please add another service first."
 			)
-		print(f"[AIService] on_trash() completed for: {self.name}")
 
 	@frappe.whitelist()
 	def ping(self):
 		"""
 		Generic ping: POST or GET to the configured base_url with user-provided headers and payload.
 		"""
-		print(f"[AIService] ping() called for: {self.name}")
 		hook_result = self._try_hooks()
 		if hook_result is not None:
 			return hook_result
 		self._validate_ping_request()
 		result = self._execute_ping_request()
-		print(f"[AIService] ping() completed for: {self.name}")
 		return result
 
 	def _try_hooks(self):
 		"""Try to get result from hooks first."""
-		hook_result = self._run_ping_hooks()
-		if hook_result is not None:
-			print(f"[AIService] ping() hook result: {hook_result}")
-			return hook_result
+		hook_paths = frappe.get_hooks("ai_service_ping")
+		for path in hook_paths:
+			hook_fn = frappe.get_attr(path)
+			result = hook_fn(doc=self)
+			if result is not None:
+				return result
 		return None
 
 	def _validate_ping_request(self):
 		"""Validate ping request requirements."""
 		if not self.base_url:
-			print("[AIService] ping() Base URL is missing!")
 			frappe.throw(frappe._("Base URL is required"))
 
 	def _execute_ping_request(self):
 		"""Execute the ping request."""
 		headers = self._build_headers()
 		payload = self._build_payload()
-		http_method = getattr(self, "http_method", None) or "POST"
-		print(f"[AIService] ping() HTTP method: {http_method}")
-		return self._make_ping_request(http_method, headers, payload)
+		http_method = self._get_http_method()
+		return self._make_request(http_method, self.base_url, headers, payload, "ping")
 
 	def _run_ping_hooks(self):
-		print(f"[AIService] _run_ping_hooks() called for: {self.name}")
 		hook_paths = frappe.get_hooks("ai_service_ping")
-		print(f"[AIService] _run_ping_hooks() found hooks: {hook_paths}")
 		for path in hook_paths:
-			print(f"[AIService] _run_ping_hooks() running: {path}")
 			hook_fn = frappe.get_attr(path)
 			result = hook_fn(doc=self)
-			print(f"[AIService] _run_ping_hooks() result from {path}: {result}")
 			if result is not None:
-				print(f"[AIService] _run_ping_hooks() using result from {path}")
 				return result
-		print("[AIService] _run_ping_hooks() no hook returned a result.")
 		return None
 
 	def _build_headers(self):
@@ -121,12 +101,9 @@ class AIService(Document):
 		- None: no auth header from parent
 		- Always build all other headers from custom_headers child table
 		"""
-		print(f"[AIService] _build_headers() called for: {self.name}")
 		headers = self._init_headers()
 		headers = self._add_auth_headers(headers)
 		headers = self._add_custom_headers(headers)
-		print(f"[AIService] _build_headers() Final headers: {headers}")
-		print(f"[AIService] _build_headers() completed for: {self.name}")
 		return headers
 
 	def _init_headers(self):
@@ -151,8 +128,6 @@ class AIService(Document):
 		api_key = (
 			get_decrypted_password(self.doctype, self.name, "api_key", raise_exception=False) or self.api_key
 		)
-		masked_key = api_key[:4] + "..." + api_key[-4:] if api_key and len(api_key) > 8 else "****"
-		print(f"[AIService] _build_headers() Using Bearer token: {masked_key}")
 		headers["Authorization"] = f"Bearer {api_key}"
 		return headers
 
@@ -163,8 +138,6 @@ class AIService(Document):
 			get_decrypted_password(self.doctype, self.name, "api_key_value", raise_exception=False)
 			or self.api_key_value
 		)
-		masked_value = value[:4] + "..." + value[-4:] if value and len(value) > 8 else "****"
-		print(f"[AIService] _build_headers() Using API Key header: {key}, value: {masked_value}")
 		headers[key] = value
 		return headers
 
@@ -177,7 +150,6 @@ class AIService(Document):
 		)
 		if username and password:
 			token = base64.b64encode(f"{username}:{password}".encode()).decode()
-			print(f"[AIService] _build_headers() Using Basic Auth for user: {username}")
 			headers["Authorization"] = f"Basic {token}"
 		return headers
 
@@ -192,20 +164,15 @@ class AIService(Document):
 						get_decrypted_password(row.doctype, row.name, "header_value", raise_exception=False)
 						or value
 					)
-					print(f"[AIService] _build_headers() Adding header: {key}: ***MASKED*** (sensitive)")
-				else:
-					print(f"[AIService] _build_headers() Adding header: {key}: {value}")
 				headers[key] = value
 		return headers
 
 	def _build_payload(self):
-		print(f"[AIService] _build_payload() called for: {self.name}")
 		payload = {}
 		if getattr(self, "custom_payload", None):
 			payload = self._parse_custom_payload()
 		else:
 			payload = self._build_default_payload()
-		print(f"[AIService] _build_payload() completed for: {self.name}")
 		return payload
 
 	def _parse_custom_payload(self):
@@ -214,10 +181,8 @@ class AIService(Document):
 			payload = self.custom_payload
 			if isinstance(payload, str):
 				payload = json.loads(payload)
-			print(f"[AIService] _build_payload() Custom payload: {payload}")
 			return payload
 		except Exception as e:
-			print(f"[AIService] _build_payload() Invalid custom_payload: {e!s}")
 			frappe.throw(f"Invalid custom_payload: {e!s}")
 
 	def _build_default_payload(self):
@@ -233,104 +198,100 @@ class AIService(Document):
 					}
 				],
 			}
-			print(f"[AIService] _build_payload() Default payload: {payload}")
 			return payload
 		return {}
 
-	def _make_ping_request(self, http_method, headers, payload):
-		print(f"[AIService] _make_ping_request() called for: {self.name}")
-		print(f"[AIService] _make_ping_request() Making request to: {self.base_url}")
+	def _get_http_method(self):
+		"""Get HTTP method with fallback to POST."""
+		return getattr(self, "http_method", None) or "POST"
+
+	def _get_timeout(self, request_type="default"):
+		"""Get timeout based on request type."""
+		timeouts = {"ping": 30, "test": 90, "ai_call": 90, "default": 60}
+		return timeouts.get(request_type, timeouts["default"])
+
+	def _make_request(self, http_method, url, headers, payload, request_type="default"):
+		"""Generic method to make HTTP requests."""
 		try:
-			resp = self._send_request(http_method, headers, payload)
-			return self._handle_response(resp)
+			resp = self._send_request(http_method, url, headers, payload, request_type)
+			return self._handle_response(resp, request_type)
 		except Exception as e:
-			print(f"[AIService] _make_ping_request() Exception: {e!s}")
-			frappe.throw(f"Ping failed: {e!s}")
+			if request_type == "ping":
+				frappe.throw(f"Ping failed: {e!s}")
+			else:
+				raise e
 
-	def _send_request(self, http_method, headers, payload):
-		"""Send HTTP request to the AI service."""
+	def _send_request(self, http_method, url, headers, payload, request_type="default"):
+		"""Send HTTP request to the service."""
+		timeout = self._get_timeout(request_type)
+
 		if http_method.upper() == "POST":
-			print(f"[AIService] _make_ping_request() POST payload: {payload}")
-			return requests.post(self.base_url, headers=headers, json=payload, timeout=30)
+			return requests.post(url, headers=headers, json=payload, timeout=timeout)
 		else:
-			print("[AIService] _make_ping_request() GET request (no payload)")
-			return requests.get(self.base_url, headers=headers, timeout=30)
+			return requests.get(url, headers=headers, timeout=timeout)
 
-	def _handle_response(self, resp):
-		"""Handle the response from the AI service."""
-		print(f"[AIService] _make_ping_request() Response status: {resp.status_code}")
-		print(f"[AIService] _make_ping_request() Response text: {resp.text}")
-
+	def _handle_response(self, resp, request_type="default"):
+		"""Handle the response from the service."""
 		if resp.status_code < 400:
-			try:
-				data = resp.json()
-				msg = frappe._("Ping successful! Response: ") + str(data)
-			except Exception:
-				msg = frappe._("Ping successful! Status: ") + str(resp.status_code)
-			print(f"[AIService] _make_ping_request() Success: {msg}")
-			frappe.msgprint(msg, title=frappe._("Ping Result"), indicator="green")
-			print(f"[AIService] _make_ping_request() completed for: {self.name}")
-			return msg
+			return self._handle_success_response(resp, request_type)
 		else:
-			print(
-				f"[AIService] _make_ping_request() Ping failed. Status: {resp.status_code}, Response: {resp.text}"
-			)
-			frappe.throw(f"Ping failed. Status: {resp.status_code}, Response: {resp.text}")
+			return self._handle_error_response(resp, request_type)
 
-	@frappe.whitelist()
-	def test_connection(self):
-		"""
-		Test connection for this AI Service instance. Shows user-friendly message instead of raw response.
-		"""
-		headers = self._build_headers()
-		print(f"[AIService] test_connection() headers main: {headers}")
-		url = self.base_url + self.base_url_suffix
-		http_method = getattr(self, "http_method", None) or "POST"
-		payload = self._build_test_payload()
+	def _handle_success_response(self, resp, request_type):
+		"""Handle successful response based on request type."""
+		handlers = {
+			"ping": self._handle_ping_success,
+			"test": self._handle_test_success,
+			"ai_call": self._handle_ai_success,
+		}
 
+		handler = handlers.get(request_type, self._handle_generic_success)
+		return handler(resp)
+
+	def _handle_ping_success(self, resp):
+		"""Handle successful ping response."""
 		try:
-			resp = self._send_test_request(url, headers, payload, http_method)
-			return self._handle_test_response(resp)
-		except requests.exceptions.Timeout:
-			return self._handle_timeout_error()
-		except requests.exceptions.ConnectionError:
-			return self._handle_connection_error()
-		except Exception as e:
-			return self._handle_generic_error(e)
+			data = resp.json()
+			msg = frappe._("Ping successful! Response: ") + str(data)
+		except Exception:
+			msg = frappe._("Ping successful! Status: ") + str(resp.status_code)
+		frappe.msgprint(msg, title=frappe._("Ping Result"), indicator="green")
+		return msg
 
-	def _build_test_payload(self):
-		"""Build payload for connection test."""
-		if getattr(self, "model_name", None):
-			return {
-				"model": self.model_name,
-				"max_tokens": 100,
-				"messages": [
-					{
-						"role": "user",
-						"content": "Ping test from Frappe. Please respond with 'pong' or similar.",
-					}
-				],
-			}
-		return {}
+	def _handle_test_success(self, resp):
+		"""Handle successful test response."""
+		service_name = self.service_type or "AI Service"
+		msg = frappe._(f"Connection established successfully with {service_name}")
+		frappe.msgprint(msg, title=frappe._("Connection Test"), indicator="green")
+		return {"status": "success", "message": msg}
 
-	def _send_test_request(self, url, headers, payload, http_method):
-		"""Send test request to the AI service."""
-		if http_method.upper() == "POST":
-			resp = requests.post(url, headers=headers, json=payload, timeout=30)
-			print(f"[AIService] test_connection() resp: {resp}")
-		else:
-			resp = requests.get(url, headers=headers, timeout=30)
-		return resp
+	def _handle_ai_success(self, resp):
+		"""Handle successful AI response."""
+		try:
+			data = resp.json()
+			return {"status": "success", "data": data, "raw_response": resp.text}
+		except Exception:
+			return {"status": "success", "data": {"content": resp.text}, "raw_response": resp.text}
 
-	def _handle_test_response(self, resp):
-		"""Handle test response from the AI service."""
-		if resp.status_code == 200:
-			service_name = self.service_type or "AI Service"
-			msg = f"✅ Connection established successfully with {service_name}"
-			frappe.msgprint(msg, title=frappe._("Connection Test"), indicator="green")
-			return {"status": "success", "message": msg}
-		else:
-			return self._handle_test_error(resp)
+	def _handle_generic_success(self, resp):
+		"""Handle generic successful response."""
+		return {"status": "success", "data": resp.text}
+
+	def _handle_error_response(self, resp, request_type):
+		"""Handle error response based on request type."""
+		error_handlers = {
+			"ping": lambda r: frappe.throw(f"Ping failed. Status: {r.status_code}, Response: {r.text}"),
+			"test": self._handle_test_error,
+			"ai_call": lambda r: frappe.throw(
+				frappe._(f"AI call failed. Status: {r.status_code}, Response: {r.text}")
+			),
+		}
+
+		handler = error_handlers.get(
+			request_type,
+			lambda r: frappe.throw(f"Request failed. Status: {r.status_code}, Response: {r.text}"),
+		)
+		return handler(resp)
 
 	def _handle_test_error(self, resp):
 		"""Handle test error response."""
@@ -340,38 +301,83 @@ class AIService(Document):
 
 	def _get_error_message(self, status_code):
 		"""Get user-friendly error message based on status code."""
-		if status_code == 401:
-			return "❌ Authentication failed. Please check your credentials."
-		elif status_code == 403:
-			return "❌ Access denied. Please check your API permissions."
-		elif status_code == 404:
-			return "❌ Service not found. Please check the URL."
+		error_messages = {
+			401: frappe._("Authentication failed. Please check your credentials."),
+			403: frappe._("Access denied. Please check your API permissions."),
+			404: frappe._("Service not found. Please check the URL."),
+		}
+
+		if status_code in error_messages:
+			return error_messages[status_code]
 		elif status_code >= 500:
-			return "❌ Server error. Please try again later."
+			return frappe._("Server error. Please try again later.")
 		else:
-			return f"❌ Connection failed with status code: {status_code}"
+			return frappe._(f"Connection failed with status code: {status_code}")
+
+	def _handle_exception(self, e, request_type="default"):
+		"""Handle exceptions based on request type."""
+		if request_type == "test":
+			return self._handle_test_exception(e)
+		else:
+			frappe.log_error(f"[AIService] {request_type} Exception: {e!s}")
+			frappe.throw(frappe._(f"{request_type.title()} failed: {e!s}"))
+
+	def _handle_test_exception(self, e):
+		"""Handle test exceptions."""
+		exception_handlers = {
+			requests.exceptions.Timeout: self._handle_timeout_error,
+			requests.exceptions.ConnectionError: self._handle_connection_error,
+		}
+
+		handler = exception_handlers.get(type(e), self._handle_generic_error)
+		return handler(e)
 
 	def _handle_timeout_error(self):
 		"""Handle timeout error."""
-		error_msg = "❌ Connection timeout. Please check your network or try again."
+		error_msg = frappe._("Connection timeout. Please check your network or try again.")
 		frappe.msgprint(error_msg, title=frappe._("Connection Test"), indicator="red")
 		return {"status": "error", "message": error_msg}
 
 	def _handle_connection_error(self):
 		"""Handle connection error."""
-		error_msg = "❌ Connection failed. Please check the URL and network connectivity."
+		error_msg = frappe._("Connection failed. Please check the URL and network connectivity.")
 		frappe.msgprint(error_msg, title=frappe._("Connection Test"), indicator="red")
 		return {"status": "error", "message": error_msg}
 
 	def _handle_generic_error(self, e):
 		"""Handle generic error."""
-		error_msg = f"❌ Connection test failed: {e!s}"
+		error_msg = frappe._("Connection test failed: {e!s}")
 		frappe.msgprint(error_msg, title=frappe._("Connection Test"), indicator="red")
-		print(f"[AIService] test_connection() Exception: {e!s}")
 		return {"status": "error", "message": error_msg}
 
 	@frappe.whitelist()
-	def make_ai_call(self, user_prompt=None, system_prompt=None, custom_data=None, system_prompt_level=False):
+	def test_connection(self):
+		"""
+		Test connection for this AI Service instance. Shows user-friendly message instead of raw response.
+		"""
+		headers = self._build_headers()
+		url = self.base_url + getattr(self, "base_url_suffix", "")
+		http_method = self._get_http_method()
+		payload = self._build_test_payload()
+
+		try:
+			resp = self._send_request(http_method, url, headers, payload, "test")
+			return self._handle_response(resp, "test")
+		except Exception as e:
+			return self._handle_exception(e, "test")
+
+	def _build_test_payload(self):
+		"""Build payload for connection test."""
+		payload = json.loads(frappe.get_value("AI Service", self.name, "test_payload"))
+		if payload:
+			return payload
+		else:
+			return self._build_default_payload()
+
+	@frappe.whitelist()
+	def make_ai_call(
+		self, user_prompt=None, system_prompt=None, custom_data=None, messages=None, payload=None
+	):
 		"""
 		Make a call to the AI service with custom prompts and data.
 
@@ -387,96 +393,103 @@ class AIService(Document):
 		if not self.is_active:
 			frappe.throw(f"AI Service {self.name} is not active")
 
-		# Build headers and payload
+		request_data = self._prepare_ai_request(user_prompt, system_prompt, custom_data, messages, payload)
+		return self._execute_ai_request(request_data)
+
+	def _prepare_ai_request(self, user_prompt, system_prompt, custom_data, messages, payload):
+		"""Prepare request data for AI call."""
 		headers = self._build_headers()
-		payload = self._build_ai_call_payload(user_prompt, system_prompt, custom_data, system_prompt_level)
-
-		# Make the request
+		final_payload = self._build_ai_call_payload(
+			user_prompt, system_prompt, custom_data, messages, payload
+		)
 		url = self.base_url + (getattr(self, "base_url_suffix", "") or "")
-		http_method = getattr(self, "http_method", None) or "POST"
+		http_method = self._get_http_method()
 
+		return {"headers": headers, "payload": final_payload, "url": url, "http_method": http_method}
+
+	def _execute_ai_request(self, request_data):
+		"""Execute the AI request."""
 		try:
-			resp = self._send_ai_request(url, headers, payload, http_method)
-			return self._handle_ai_response(resp)
+			resp = self._send_request(
+				request_data["http_method"],
+				request_data["url"],
+				request_data["headers"],
+				request_data["payload"],
+				"ai_call",
+			)
+			return self._handle_response(resp, "ai_call")
 		except Exception as e:
-			print(f"[AIService] make_ai_call() Exception: {e!s}")
-			frappe.throw(f"AI call failed: {e!s}")
+			return self._handle_exception(e, "ai_call")
 
 	def _build_ai_call_payload(
-		self, user_prompt=None, system_prompt=None, custom_data=None, system_prompt_level=False
+		self, user_prompt=None, system_prompt=None, custom_data=None, messages=None, payload=None
 	):
 		"""Build payload for AI service call with custom prompts."""
-		# Use provided prompts or fall back to defaults
-		final_system_prompt = system_prompt or getattr(self, "system_prompt", "")
-		final_user_prompt = user_prompt or getattr(self, "user_prompt", "")
+		final_system_prompt = self._get_final_system_prompt(system_prompt, custom_data)
+		final_user_prompt = self._get_final_user_prompt(user_prompt, custom_data)
 
-		# Process Jinja templates if custom_data is provided
+		messages = self._build_messages_array(messages, final_system_prompt, final_user_prompt)
+		payload = self._build_final_payload(payload, messages, final_system_prompt)
+
+		return payload
+
+	def _get_final_system_prompt(self, system_prompt, custom_data):
+		"""Get final system prompt with template rendering."""
+		final_system_prompt = system_prompt or getattr(self, "system_prompt", "")
 		if custom_data and final_system_prompt:
 			final_system_prompt = self._render_jinja_template(final_system_prompt, custom_data)
+		return final_system_prompt
+
+	def _get_final_user_prompt(self, user_prompt, custom_data):
+		"""Get final user prompt with template rendering."""
+		final_user_prompt = user_prompt or getattr(self, "user_prompt", "")
 		if custom_data and final_user_prompt:
 			final_user_prompt = self._render_jinja_template(final_user_prompt, custom_data)
+		return final_user_prompt
 
-		# Build messages array
-		messages = []
-		if final_system_prompt and self.service_type != "Claude":
-			messages.append({"role": "system", "content": final_system_prompt})
+	def _build_messages_array(self, messages, final_system_prompt, final_user_prompt):
+		"""Build messages array with system and user prompts."""
+		if not messages:
+			messages = []
+
+		if final_system_prompt:
+			messages = self._update_system_message(messages, final_system_prompt)
 
 		if final_user_prompt:
 			messages.append({"role": "user", "content": final_user_prompt})
 
-		# Build payload based on service type
-		payload = {"messages": messages}
+		return messages
 
-		# Add model name if specified
+	def _update_system_message(self, messages, final_system_prompt):
+		"""Update existing system message or add new one."""
+		for message in messages:
+			if message.get("role") == "system":
+				message["content"] = final_system_prompt
+				break
+		return messages
+
+	def _build_final_payload(self, payload, messages, final_system_prompt):
+		"""Build final payload with messages and model."""
+		if not payload:
+			payload = {"messages": messages}
+		else:
+			payload["messages"] = messages
+
 		if getattr(self, "model_name", None):
 			payload["model"] = self.model_name
 
-		if self.service_type == "Claude":
+		if "system" in payload.keys() and final_system_prompt:
 			payload["system"] = final_system_prompt
 
-		# Add max_tokens for Claude services
-		if self.service_type == "Claude":
-			payload["max_tokens"] = 4000
-
-		print(f"[AIService] _build_ai_call_payload() payload: {payload}")
 		return payload
 
 	def _render_jinja_template(self, template, data):
 		"""Render Jinja template with provided data."""
 		try:
-			from jinja2 import Template
-
 			template_obj = Template(template)
 			return template_obj.render(**data)
-		except Exception as e:
-			print(f"[AIService] _render_jinja_template() error: {e!s}")
-			# Return original template if rendering fails
+		except Exception:
 			return template
-
-	def _send_ai_request(self, url, headers, payload, http_method):
-		"""Send AI request to the service."""
-		print(f"[AIService] _send_ai_request() to: {url}")
-		print(f"[AIService] _send_ai_request() payload: {payload}")
-
-		if http_method.upper() == "POST":
-			return requests.post(url, headers=headers, json=payload, timeout=60)
-		else:
-			return requests.get(url, headers=headers, timeout=60)
-
-	def _handle_ai_response(self, resp):
-		"""Handle AI service response."""
-		print(f"[AIService] _handle_ai_response() status: {resp.status_code}")
-
-		if resp.status_code < 400:
-			try:
-				data = resp.json()
-				return {"status": "success", "data": data, "raw_response": resp.text}
-			except Exception as e:
-				return {"status": "success", "data": {"content": resp.text}, "raw_response": resp.text}
-		else:
-			error_msg = f"AI call failed. Status: {resp.status_code}, Response: {resp.text}"
-			print(f"[AIService] _handle_ai_response() error: {error_msg}")
-			frappe.throw(error_msg)
 
 
 @frappe.whitelist()
@@ -492,7 +505,9 @@ def test_connection(docname):
 
 
 @frappe.whitelist()
-def make_ai_call(docname, user_prompt=None, system_prompt=None, custom_data=None):
+def make_ai_call(
+	docname, user_prompt=None, system_prompt=None, custom_data=None, messages=None, payload=None
+):
 	"""Wrapper function to make AI service call."""
 	doc = frappe.get_doc("AI Service", docname)
-	return doc.make_ai_call(user_prompt, system_prompt, custom_data)
+	return doc.make_ai_call(user_prompt, system_prompt, custom_data, messages, payload)

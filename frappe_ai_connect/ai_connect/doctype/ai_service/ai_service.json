@@ -16,6 +16,7 @@
   "base_url_suffix",
   "custom_headers",
   "model_name",
+  "test_payload",
   "is_default",
   "is_active",
   "system_prompt",
@@ -71,10 +72,10 @@
   },
   {
    "fieldname": "service_type",
-   "fieldtype": "Select",
+   "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Service Type",
-   "options": "Claude\nPerplexity"
+   "options": "AI Tool"
   },
   {
    "fieldname": "base_url",
@@ -120,11 +121,17 @@
    "fieldtype": "HTML",
    "options": "<div style=\"font-family: sans-serif; max-width: 800px; line-height: 1.6; color: #333;\">\n  <h2 style=\"border-bottom: 2px solid #ddd; padding-bottom: 4px;\">Help</h2>\n  \n  <p style=\"margin-top: 1em;\">\n    This app lets you configure and manage AI service connections for your Frappe/ERPNext system. \n    It provides a flexible way to integrate with various AI providers like Claude and Perplexity, \n    enabling AI-powered workflows and automation throughout your application.\n  </p>\n\n  <h3 style=\"color: #2c3e50; margin-top: 1.5em;\">What You Can Do</h3>\n  <ul style=\"padding-left: 20px;\">\n    <li>Configure <strong>multiple AI services</strong> (Claude, Perplexity, and more) with different authentication methods.</li>\n    <li>Set up <strong>secure authentication</strong> using Bearer tokens, API keys, or basic auth.</li>\n    <li>Define <strong>custom system prompts</strong> and user prompts for consistent AI interactions.</li>\n    <li>Set a <strong>default service</strong> per service type for automatic selection.</li>\n    <li>Add <strong>custom headers</strong> for specialized API requirements.</li>\n    <li>Test connections to ensure your AI services are working properly.</li>\n    <li>Enable/disable services without deleting them to maintain configuration history.</li>\n  </ul>\n\n  <h3 style=\"color: #2c3e50; margin-top: 1.5em;\">How to Fill This Form</h3>\n  <ol style=\"padding-left: 20px;\">\n    <li><strong>Service Type:</strong> Choose the AI provider (Claude, Perplexity, or custom).</li>\n    <li><strong>Base URL:</strong> Enter the API endpoint URL for your AI service (required).</li>\n    <li><strong>Authentication:</strong> Select the auth type and provide credentials:\n      <ul style=\"padding-left: 20px; margin-top: 8px;\">\n        <li><strong>None:</strong> For services that don't require authentication</li>\n        <li><strong>Bearer:</strong> Enter your Bearer token</li>\n        <li><strong>API Key:</strong> Specify header name (default: x-api-key) and your API key value</li>\n        <li><strong>Basic:</strong> Provide username and password for basic authentication</li>\n      </ul>\n    </li>\n    <li><strong>Model Name:</strong> Specify the AI model to use (e.g., claude-3-sonnet-20240229).</li>\n    <li><strong>Custom Headers:</strong> Add any additional HTTP headers your service requires.</li>\n    <li><strong>System Prompt:</strong> Define the base instructions for the AI service. (Jinja Support)</li>\n    <li><strong>User Prompt:</strong> Set default user-facing prompts for this service. (Jinja Support)</li>\n    <li><strong>Default Service:</strong> Check this to make this the default for its service type.</li>\n    <li><strong>Enabled:</strong> Keep checked to activate this service, uncheck to disable temporarily.</li>\n    <li><strong>Test Connection:</strong> Use the \"Test Connection\" button to verify your setup works.</li>\n  </ol>\n\n  <h3 style=\"color: #2c3e50; margin-top: 1.5em;\">Important Notes</h3>\n  <ul style=\"padding-left: 20px;\">\n    <li>Only <strong>one default service</strong> is allowed per service type (Claude, Perplexity, etc.).</li>\n    <li>You cannot delete the <strong>last active service</strong> of any type - add another first.</li>\n    <li>API keys and passwords are <strong>encrypted</strong> for security.</li>\n    <li>Use the <strong>ping function</strong> to test basic connectivity to your service.</li>\n    <li>Custom headers marked as <strong>sensitive</strong> will be encrypted in storage.</li>\n  </ul>\n\n</div>",
    "read_only": 1
+  },
+  {
+   "description": "Provide Test Payload Here",
+   "fieldname": "test_payload",
+   "fieldtype": "JSON",
+   "label": "Test Payload"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-07-30 14:10:07.771846",
+ "modified": "2025-08-02 22:08:55.615176",
  "modified_by": "Administrator",
  "module": "AI Connect",
  "name": "AI Service",
